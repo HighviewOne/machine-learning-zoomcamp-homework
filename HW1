@@ -1,0 +1,89 @@
+import pandas as pd
+pd.__version__
+
+# The name of your uploaded file
+file_path = 'car.txt'
+
+# 1. Load the data using pandas.read_csv()
+# We create a DataFrame named 'df'
+try:
+    df = pd.read_csv(file_path)
+
+    # 2. Find the total record count (number of rows)
+    # The .shape attribute returns a tuple (rows, columns).
+    # The record count is the first element (index 0).
+    record_count = df.shape[0]
+
+    # 3. Print the result
+    print(f"✅ Data loaded successfully. The file has {record_count} records.")
+
+except FileNotFoundError:
+    print(f"❌ Error: The file '{file_path}' was not found. Make sure it's in the same directory as your notebook.")
+except Exception as e:
+    print(f"❌ An error occurred during file processing: {e}")
+
+# Load the dataset
+file_path = "car_fuel_efficiency.txt"
+df = pd.read_csv(file_path)
+
+# Count the number of unique fuel types
+unique_fuel_types = df['fuel_type'].nunique()
+unique_fuel_types, df['fuel_type'].unique()
+
+# Count total missing values in the dataset
+missing_values_total = df.isnull().sum().sum()
+
+# Count missing values per column
+missing_values_per_column = df.isnull().sum()
+
+missing_values_total, missing_values_per_column
+# Find the maximum fuel efficiency value
+max_fuel_efficiency = df['fuel_efficiency_mpg'].max()
+max_fuel_efficiency
+
+# Filter rows for cars from Asia and find max fuel efficiency
+max_fuel_efficiency_asia = df[df['origin'] == 'Asia']['fuel_efficiency_mpg'].max()
+max_fuel_efficiency_asia
+
+# Step 1: Median horsepower before filling missing values
+median_before = df['horsepower'].median()
+
+# Step 2: Most frequent (mode) horsepower
+most_frequent = df['horsepower'].mode()[0]
+
+# Step 3: Fill missing values with most frequent value
+df['horsepower_filled'] = df['horsepower'].fillna(most_frequent)
+
+# Step 4: Median horsepower after filling
+median_after = df['horsepower_filled'].median()
+
+print("Median before filling:", median_before)
+print("Most frequent value (mode):", most_frequent)
+print("Median after filling:", median_after)
+print("Has the median changed?", median_before != median_after)
+
+# Step 1: Select all cars from Asia
+asia_cars = df[df['origin'] == 'Asia']
+
+# Step 2: Select only vehicle_weight and model_year
+asia_subset = asia_cars[['vehicle_weight', 'model_year']]
+
+# Step 3: Select the first 7 values
+X = asia_subset.head(7).to_numpy()
+
+# Step 4: Compute XTX = X.T @ X
+XTX = X.T @ X
+
+# Step 5: Invert XTX
+XTX_inv = np.linalg.inv(XTX)
+
+# Step 6: Create y
+y = np.array([1100, 1300, 800, 900, 1000, 1100, 1200])
+
+# Step 7: Compute w = XTX_inv @ X.T @ y
+w = XTX_inv @ X.T @ y
+
+# Step 8: Sum of all elements in w
+result_sum = w.sum()
+
+print("Sum of all elements in w:", result_sum)
