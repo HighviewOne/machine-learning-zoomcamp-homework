@@ -1,0 +1,320 @@
+HW2
+
+import pandas as pd
+import numpy as np
+
+# Load the dataset
+url = 'https://raw.githubusercontent.com/alexeygrigorev/datasets/master/car_fuel_efficiency.csv'
+df = pd.read_csv(url)
+
+# Select only the required columns
+columns_to_use = [
+    'engine_displacement',
+    'horsepower',
+    'vehicle_weight',
+    'model_year',
+    'fuel_efficiency_mpg'
+]
+
+df_selected = df[columns_to_use]
+
+# Check for missing values
+print("Missing values in each column:")
+print(df_selected.isnull().sum())
+print("\n" + "="*50 + "\n")
+
+# Show percentage of missing values
+print("Percentage of missing values:")
+print((df_selected.isnull().sum() / len(df_selected) * 100).round(2))
+print("\n" + "="*50 + "\n")
+
+# Display first few rows
+print("First few rows of the dataset:")
+print(df_selected.head(10))
+print("\n" + "="*50 + "\n")
+
+# Basic info about the dataset
+print("Dataset shape:", df_selected.shape)
+print("\nDataset info:")
+print(df_selected.info())
+
+# Calculate median for horsepower
+median_horsepower = df_selected['horsepower'].median()
+print(f"Median (50% percentile) for 'horsepower': {median_horsepower}")
+print("\n" + "="*50 + "\n")
+
+# Additional statistics for horsepower
+print("Statistics for 'horsepower':")
+print(df_selected['horsepower'].describe())
+
+# Shuffle with seed 42
+np.random.seed(42)
+df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# Split 60/20/20
+n = len(df_shuffled)
+n_train = int(0.6 * n)
+n_val = int(0.2 * n)
+n_test = n - n_train - n_val
+
+df_train = df_shuffled[:n_train]
+df_val = df_shuffled[n_train:n_train+n_val]
+df_test = df_shuffled[n_train+n_val:]
+
+# Separate target variable
+y_train = df_train['fuel_efficiency_mpg'].values
+y_val = df_val['fuel_efficiency_mpg'].values
+y_test = df_test['fuel_efficiency_mpg'].values
+
+# Drop target from features
+X_train = df_train.drop('fuel_efficiency_mpg', axis=1)
+X_val = df_val.drop('fuel_efficiency_mpg', axis=1)
+X_test = df_test.drop('fuel_efficiency_mpg', axis=1)
+
+def train_linear_regression(X, y):
+    """Train linear regression without regularization"""
+    # Ensure X and y are numeric numpy arrays
+    X = np.array(X, dtype=float)
+    y = np.array(y, dtype=float)
+    
+    ones = np.ones(X.shape[0])
+    X = np.column_stack([ones, X])
+    
+    XTX = X.T.dot(X)
+    XTX_inv = np.linalg.inv(XTX)
+    w_full = XTX_inv.dot(X.T).dot(y)
+    
+    return w_full[0], w_full[1:]
+
+def rmse(y_true, y_pred):
+    """Calculate RMSE"""
+    y_true = np.array(y_true, dtype=float)
+    y_pred = np.array(y_pred, dtype=float)
+    se = (y_true - y_pred) ** 2
+    mse = se.mean()
+    return np.sqrt(mse)
+
+# First, identify and handle categorical columns
+# Keep only numeric columns for the regression
+numeric_columns = X_train.select_dtypes(include=['number']).columns
+
+# Option 1: Fill with 0
+X_train_0 = X_train[numeric_columns].fillna(0).values.astype(float)
+X_val_0 = X_val[numeric_columns].fillna(0).values.astype(float)
+
+w0_opt1, w_opt1 = train_linear_regression(X_train_0, y_train)
+y_pred_opt1 = w0_opt1 + X_val_0.dot(w_opt1)
+rmse_opt1 = round(rmse(y_val, y_pred_opt1), 2)
+
+# Option 2: Fill with mean (computed from training data only)
+train_means = X_train[numeric_columns].mean()
+X_train_mean = X_train[numeric_columns].fillna(train_means).values.astype(float)
+X_val_mean = X_val[numeric_columns].fillna(train_means).values.astype(float)
+
+w0_opt2, w_opt2 = train_linear_regression(X_train_mean, y_train)
+y_pred_opt2 = w0_opt2 + X_val_mean.dot(w_opt2)
+rmse_opt2 = round(rmse(y_val, y_pred_opt2), 2)
+
+print(f"RMSE with 0 fill: {rmse_opt1}")
+print(f"RMSE with mean fill: {rmse_opt2}")
+
+if rmse_opt1 < rmse_opt2:
+    print("Better option: Fill with 0")
+elif rmse_opt2 < rmse_opt1:
+    print("Better option: Fill with mean")
+else:
+    print("Both options give the same RMSE")
+
+def train_linear_regression_reg(X, y, r=0.0):
+    """Train linear regression with L2 regularization (Ridge regression)"""
+    # Ensure X and y are numeric numpy arrays
+    X = np.array(X, dtype=float)
+    y = np.array(y, dtype=float)
+
+    # Add a column of ones for the bias term
+    ones = np.ones(X.shape[0])
+    X = np.column_stack([ones, X])
+
+    # Calculate X^T * X
+    XTX = X.T.dot(X)
+
+    # Add regularization term: r * I
+    # I is an identity matrix of size XTX.shape[0] x XTX.shape[1]
+    # np.eye(XTX.shape[0]) creates the identity matrix.
+    reg_term = r * np.eye(XTX.shape[0])
+    XTX_reg = XTX + reg_term
+
+    # Calculate the inverse: (X^T X + r * I)^-1
+    XTX_inv = np.linalg.inv(XTX_reg)
+
+    # Calculate the full weight vector: w = (X^T X + r * I)^-1 * X^T * y
+    w_full = XTX_inv.dot(X.T).dot(y)
+
+    # w_full[0] is the bias (w0), w_full[1:] are the other weights (w)
+    return w_full[0], w_full[1:]
+
+def rmse(y_true, y_pred):
+    """Calculate RMSE"""
+    y_true = np.array(y_true, dtype=float)
+    y_pred = np.array(y_pred, dtype=float)
+    se = (y_true - y_pred) ** 2
+    mse = se.mean()
+    return np.sqrt(mse)
+
+r_values = [0, 0.01, 0.1, 1, 5, 10, 100]
+results = []
+best_rmse = float('inf')
+best_r = -1
+
+print("Regularized Linear Regression with NA filled by 0:")
+print("-------------------------------------------------")
+for r in r_values:
+    # 1. Train the model
+    w0, w = train_linear_regression_reg(X_train_0, y_train, r=r)
+
+    # 2. Predict on validation set
+    y_pred = w0 + X_val_0.dot(w)
+
+    # 3. Calculate RMSE
+    score = rmse(y_val, y_pred)
+    rounded_score = round(score, 2)
+
+    results.append((r, rounded_score))
+    print(f"r={r:<5} | RMSE: {rounded_score}")
+
+    # 4. Check for best r (smallest r for the best RMSE)
+    if rounded_score < best_rmse:
+        best_rmse = rounded_score
+        best_r = r
+    elif rounded_score == best_rmse:
+        # If RMSE is equal, keep the current best_r since r is iterated from smallest to largest
+        pass
+
+
+print("-------------------------------------------------")
+print(f"Best RMSE: {best_rmse}")
+print(f"Best r (smallest r for best RMSE): {best_r}")
+
+seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+rmse_scores = []
+# ... (N_train and N_val calculation) ...
+
+for seed in seeds:
+    # 1. Shuffle and split using the current seed
+    np.random.seed(seed)
+    df_shuffled = df_selected.sample(frac=1, random_state=seed).reset_index(drop=True)
+
+    df_train = df_shuffled[:n_train]
+    df_val = df_shuffled[n_train:n_train+n_val]
+
+    y_train = df_train['fuel_efficiency_mpg'].values
+    y_val = df_val['fuel_efficiency_mpg'].values
+
+    # 2. Impute NA with 0
+    feature_cols = ['engine_displacement', 'horsepower', 'vehicle_weight', 'model_year']
+    X_train_0 = df_train[feature_cols].fillna(0).values.astype(float)
+    X_val_0 = df_val[feature_cols].fillna(0).values.astype(float)
+
+    # 3. Train and 4. Evaluate
+    w0, w = train_linear_regression(X_train_0, y_train)
+    y_pred = w0 + X_val_0.dot(w)
+    score = rmse(y_val, y_pred)
+    rmse_scores.append(score)
+
+# 5. Calculate standard deviation
+std_rmse = np.std(rmse_scores)
+rounded_std = round(std_rmse, 3)
+
+print(f"Standard deviation (rounded to 3 decimal places): {rounded_std}")
+
+import pandas as pd
+import numpy as np
+
+# --- Function Definitions ---
+def train_linear_regression_reg(X, y, r=0.0):
+    """Train linear regression with L2 regularization (Ridge regression)"""
+    # Add a column of ones for the bias term
+    ones = np.ones(X.shape[0])
+    X = np.column_stack([ones, X])
+
+    # Calculate X^T * X
+    XTX = X.T.dot(X)
+
+    # Add regularization term: r * I
+    reg_term = r * np.eye(XTX.shape[0])
+    XTX_reg = XTX + reg_term
+
+    # Calculate the inverse: (X^T X + r * I)^-1
+    XTX_inv = np.linalg.inv(XTX_reg)
+
+    # Calculate the full weight vector: w = (X^T X + r * I)^-1 * X^T * y
+    w_full = XTX_inv.dot(X.T).dot(y)
+
+    # w_full[0] is the bias (w0), w_full[1:] are the other weights (w)
+    return w_full[0], w_full[1:]
+
+def rmse(y_true, y_pred):
+    """Calculates the Root Mean Squared Error (RMSE)."""
+    y_true = np.array(y_true, dtype=float)
+    y_pred = np.array(y_pred, dtype=float)
+    se = (y_true - y_pred) ** 2
+    mse = se.mean()
+    return np.sqrt(mse)
+
+# --- Main Calculation ---
+# 1. Load the data
+df = pd.read_csv("data.csv")
+
+# 2. Data Preparation and Feature Selection
+# Calculate the log-transformed combined MPG (target variable)
+df['combined_mpg'] = (df['city mpg'] + df['highway MPG']) / 2
+y = np.log1p(df['combined_mpg'])
+feature_cols = ['Engine HP', 'Engine Cylinders', 'Popularity', 'Year']
+X = df[feature_cols]
+
+# 3. Split the data (60%/20%/20%) using seed 9
+seed = 9
+n = len(df)
+n_train = int(0.6 * n)
+n_val = int(0.2 * n)
+n_test = n - n_train - n_val
+
+idx = np.arange(n)
+np.random.seed(seed)
+np.random.shuffle(idx)
+
+# Apply shuffled index to X and y
+X_shuffled = X.iloc[idx].reset_index(drop=True)
+y_shuffled = y.iloc[idx].reset_index(drop=True)
+
+# Split datasets
+X_train = X_shuffled[:n_train]
+X_val = X_shuffled[n_train:n_train+n_val]
+X_test = X_shuffled[n_train+n_val:]
+
+y_train = y_shuffled[:n_train].values
+y_val = y_shuffled[n_train:n_train+n_val].values
+y_test = y_shuffled[n_train+n_val:].values
+
+# 4. Combine train and validation datasets
+X_train_val = pd.concat([X_train, X_val])
+y_train_val = np.concatenate([y_train, y_val])
+
+# 5. Prepare features: Fill NA with 0
+# Prepare X_train_val
+X_train_val_0 = X_train_val.fillna(0).values.astype(float)
+# Prepare X_test
+X_test_0 = X_test.fillna(0).values.astype(float)
+
+# 6. Train the model with r=0.001
+r = 0.001
+w0, w = train_linear_regression_reg(X_train_val_0, y_train_val, r=r)
+
+# 7. Evaluate on the test dataset
+y_pred_test = w0 + X_test_0.dot(w)
+rmse_test = rmse(y_test, y_pred_test)
+
+# 8. Output
+rounded_rmse = round(rmse_test, 3)
+
+print(f"RMSE on the test dataset (r={r}, seed={seed}): {rounded_rmse}")
