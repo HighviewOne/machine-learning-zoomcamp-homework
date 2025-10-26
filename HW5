@@ -1,0 +1,119 @@
+Question 1: Install uv and check version
+To install uv and check its version:
+bashcurl -LsSf https://astral.sh/uv/install.sh | sh
+uv --version
+
+Question 2: Install Scikit-Learn and find first hash
+bash# Create project directory
+mkdir ml-homework
+cd ml-homework
+
+# Initialize uv project
+uv init
+
+# Install scikit-learn 1.6.1
+uv add scikit-learn==1.6.1
+Then check the uv.lock file for the first hash of scikit-learn. Look for a line starting with sha256: under the scikit-learn entry.
+
+Question 3: Score the record
+python:
+import pickle
+
+# Load the pipeline
+with open('pipeline_v1.bin', 'rb') as f:
+    pipeline = pickle.load(f)
+
+# Score the client
+client = {
+    "lead_source": "paid_ads",
+    "number_of_courses_viewed": 2,
+    "annual_income": 79276.0
+}
+
+# Get probability
+probability = pipeline.predict_proba([client])[0, 1]
+print(f"Probability: {probability:.3f}")
+
+Question 4: Serve with FastAPI
+First, install FastAPI:
+bash
+uv add fastapi uvicorn
+
+Create app.py:
+python
+import pickle
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+# Load the pipeline
+with open('pipeline_v1.bin', 'rb') as f:
+    pipeline = pickle.load(f)
+
+app = FastAPI()
+
+class Lead(BaseModel):
+    lead_source: str
+    number_of_courses_viewed: int
+    annual_income: float
+
+@app.post("/predict")
+def predict(lead: Lead):
+    client = lead.dict()
+    probability = pipeline.predict_proba([client])[0, 1]
+    return {"probability": probability}
+
+Run the server:
+bash
+uvicorn app:app --reload
+
+Test with:
+python
+import requests
+
+url = "http://localhost:8000/predict"
+client = {
+    "lead_source": "organic_search",
+    "number_of_courses_viewed": 4,
+    "annual_income": 80304.0
+}
+response = requests.post(url, json=client)
+print(response.json())
+
+Question 5: Docker base image size
+bash
+docker pull agrigorev/zoomcamp-model:2025
+docker images
+Look for the SIZE column for agrigorev/zoomcamp-model:2025.
+
+Question 6: Run Docker container
+Create Dockerfile:
+dockerfile
+FROM agrigorev/zoomcamp-model:2025
+
+# Install dependencies
+COPY pyproject.toml .
+RUN pip install uv && uv pip install --system -r pyproject.toml
+
+# Copy FastAPI script
+COPY app.py .
+
+# Expose port
+EXPOSE 8000
+
+# Run with uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+Build and run:
+bashdocker build -t ml-homework .
+docker run -p 8000:8000 ml-homework
+Test with the same client:
+python
+import requests
+
+url = "http://localhost:8000/predict"
+client = {
+    "lead_source": "organic_search",
+    "number_of_courses_viewed": 4,
+    "annual_income": 80304.0
+}
+response = requests.post(url, json=client)
+print(response.json())
